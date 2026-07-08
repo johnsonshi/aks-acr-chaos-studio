@@ -1,0 +1,26 @@
+# Cached workload for A1/C1b — proves already-pulled images keep RUNNING while the registry is blocked.
+# Uses imagePullPolicy: IfNotPresent so a running pod does NOT re-pull during the fault.
+# Edit the image to one already present in your test registry, then apply BEFORE starting A1.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cached-app
+  namespace: chaos-pullers
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cached-app
+  template:
+    metadata:
+      labels:
+        app: cached-app
+    spec:
+      containers:
+        - name: app
+          image: ${REGISTRY}/samples/pause:3.9
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"

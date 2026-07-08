@@ -1,0 +1,9 @@
+results/
+.chaos.env
+.deploy-outputs.json
+workloads/rendered/
+*.tar
+*.tgz
+.DS_Store
+kubeconfig
+*.log

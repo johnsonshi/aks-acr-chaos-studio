@@ -1,0 +1,7 @@
+// Auth failures (B1/B2) from ACR login events.
+// Table: ContainerRegistryLoginEvents. ResultDescription carries the HTTP status ("200" = success).
+ContainerRegistryLoginEvents
+| where TimeGenerated > ago(1h)
+| where ResultDescription != "200"
+| summarize failures = count() by bin(TimeGenerated, 1m), ResultDescription, Identity, CallerIpAddress
+| order by TimeGenerated asc

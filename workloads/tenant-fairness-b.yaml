@@ -1,0 +1,45 @@
+# D2 tenant fairness — Identity B (victim baseline). Low, steady volume.
+# Measure B's success rate + latency WHILE fairness-a-noisy storms. Per-identity limits should keep B healthy.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fairness-b-victim
+  namespace: chaos-pullers
+spec:
+  parallelism: 2
+  completions: 2
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: fairness
+        identity: tenant-b
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: puller
+          image: gcr.io/go-containerregistry/crane:debug
+          env:
+            - name: REGISTRY
+              value: "${REGISTRY}"
+            - name: IMAGE
+              value: "samples/pause:3.9"
+            - name: ITERATIONS
+              value: "60"
+            - name: CRANE_USER
+              valueFrom: { secretKeyRef: { name: acr-token-b, key: user } }
+            - name: CRANE_PASS
+              valueFrom: { secretKeyRef: { name: acr-token-b, key: pass } }
+          command: ["/busybox/sh", "-c"]
+          args:
+            - |
+              set -eu
+              crane auth login "$REGISTRY" -u "$CRANE_USER" -p "$CRANE_PASS" >/dev/null 2>&1 || true
+              ok=0; fail=0; i=0
+              while [ "$i" -lt "$ITERATIONS" ]; do
+                if crane manifest "$REGISTRY/$IMAGE" >/dev/null 2>&1; then ok=$((ok+1)); else fail=$((fail+1)); fi
+                sleep 1
+                i=$((i+1))
+              done
+              echo "tenant-b results: ok=$ok fail=$fail"

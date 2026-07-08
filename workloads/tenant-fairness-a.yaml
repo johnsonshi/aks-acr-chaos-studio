@@ -1,0 +1,53 @@
+# D2 tenant fairness — TWO identities pulling the SAME registry.
+# Identity A (this file) is the noisy neighbor: high parallelism + iterations.
+# Identity B (tenant-fairness-b.yaml) is the victim baseline: low volume.
+# ACR enforces per-identity-per-registry limits, so A's burst should NOT starve B.
+#
+# Each identity = a repository-scoped ACR token. Create two tokens and store as secrets:
+#   az acr token create -r <acr> -n tenantA --repository "*" content/read metadata/read
+#   az acr token create -r <acr> -n tenantB --repository "*" content/read metadata/read
+#   kubectl -n chaos-pullers create secret generic acr-token-a \
+#     --from-literal=user=tenantA --from-literal=pass='<tokenA-password>'
+#   kubectl -n chaos-pullers create secret generic acr-token-b \
+#     --from-literal=user=tenantB --from-literal=pass='<tokenB-password>'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fairness-a-noisy
+  namespace: chaos-pullers
+spec:
+  parallelism: 40
+  completions: 40
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: fairness
+        identity: tenant-a
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: puller
+          image: gcr.io/go-containerregistry/crane:debug
+          env:
+            - name: REGISTRY
+              value: "${REGISTRY}"
+            - name: IMAGE
+              value: "samples/pause:3.9"
+            - name: ITERATIONS
+              value: "300"
+            - name: CRANE_USER
+              valueFrom: { secretKeyRef: { name: acr-token-a, key: user } }
+            - name: CRANE_PASS
+              valueFrom: { secretKeyRef: { name: acr-token-a, key: pass } }
+          command: ["/busybox/sh", "-c"]
+          args:
+            - |
+              set -eu
+              crane auth login "$REGISTRY" -u "$CRANE_USER" -p "$CRANE_PASS" >/dev/null 2>&1 || true
+              i=0
+              while [ "$i" -lt "$ITERATIONS" ]; do
+                crane manifest "$REGISTRY/$IMAGE" >/dev/null 2>&1 || true
+                i=$((i+1))
+              done

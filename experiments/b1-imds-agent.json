@@ -1,0 +1,39 @@
+{
+  "location": "${LOCATION}",
+  "identity": { "type": "SystemAssigned" },
+  "properties": {
+    "selectors": [
+      {
+        "type": "List",
+        "id": "sel-agent",
+        "targets": [
+          { "type": "ChaosTarget", "id": "${AGENT_TARGET_ID}" }
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "name": "Block IMDS on the node",
+        "branches": [
+          {
+            "name": "branch1",
+            "actions": [
+              {
+                "type": "continuous",
+                "name": "urn:csci:microsoft:agent:networkDisconnect/1.2",
+                "selectorId": "sel-agent",
+                "duration": "PT3M",
+                "parameters": [
+                  {
+                    "key": "destinationFilters",
+                    "value": "[{\"address\":\"169.254.169.254\",\"portLow\":80,\"portHigh\":80}]"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

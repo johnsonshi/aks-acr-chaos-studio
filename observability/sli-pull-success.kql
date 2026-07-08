@@ -1,0 +1,17 @@
+// SLI: image-pull success rate + latency from ACR diagnostic logs.
+// Table: ContainerRegistryRepositoryEvents. Run in the Log Analytics workspace from infra/.
+// Usage: az monitor log-analytics query -w <customerId> --analytics-query "@observability/sli-pull-success.kql"
+ContainerRegistryRepositoryEvents
+| where TimeGenerated > ago(1h)
+| where OperationName has "Pull"
+| extend httpStatus = tostring(ResultDescription)
+| summarize
+    total      = count(),
+    failures   = countif(httpStatus !in ("200","201","202","206","307")),
+    throttled  = countif(httpStatus == "429"),
+    p50_ms     = percentile(DurationMs, 50),
+    p95_ms     = percentile(DurationMs, 95)
+  by bin(TimeGenerated, 1m)
+| extend successRatePct = round(100.0 * (total - failures) / total, 2)
+| project TimeGenerated, total, successRatePct, throttled, p50_ms, p95_ms
+| order by TimeGenerated asc

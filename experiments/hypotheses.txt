@@ -1,0 +1,9 @@
+a1|Cached workloads keep running; NEW pulls fail during the block and auto-recover when it lifts.|ImagePullBackOff on new pulls only; cached pods stay Ready; recovery <2m after cancel
+c1b|With regional endpoints enabled and credentials wired, switching from one regional FQDN to another provides client-side failover.|pulls succeed from both regional endpoints; without explicit credentials on default AKS, direct regional FQDN pulls fail with 401
+a2|Registry DNS failure yields bounded fast-fail + retry, not indefinite hangs; resolves after the fault.|CONNECTIVITY_DNS_ERROR / "dial tcp: lookup"; recovery within one pull cycle
+a3|Added loss/latency slows pulls but they still succeed (resumable layers).|higher p95 pull latency; success rate stays high; no cascading backoff
+f1|Denying the CMK key vault degrades data-plane ops needing the key; recovers when access is restored.|pull/auth failures tied to key access; recovery after fault ends
+b1|IMDS loss blocks NEW token acquisition; cached creds keep working until TTL; recovers after fault.|AAD/refresh-token errors in LoginEvents; already-cached pulls still OK
+c2|Losing an AKS zone concentrates pulls on surviving zones; zone-redundant ACR keeps serving.|pulls continue; no 429 breach; rollout completes
+d1|Under a pull storm the client honors Retry-After and backs off; success rate stays high.|429 with Retry-After; client backoff; eventual success
+d2|A noisy identity does NOT starve a second identity (per-identity-per-registry fairness).|tenant-b success/latency unaffected while tenant-a storms

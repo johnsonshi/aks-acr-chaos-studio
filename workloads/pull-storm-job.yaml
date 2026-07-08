@@ -1,0 +1,47 @@
+# Pull-storm generator (D1 throttling / D3 failover-capacity).
+# Drives real DataplaneRead volume against a DEDICATED test registry to trigger genuine HTTP 429.
+# Uses the crane :debug image (has a shell). AUTH: easiest is to enable anonymous pull on the test
+# registry (az acr update -n <acr> --anonymous-pull-enabled), or mount a docker config secret.
+#
+# Edit REGISTRY/IMAGE, then: kubectl -n chaos-pullers apply -f pull-storm-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pull-storm
+  namespace: chaos-pullers
+spec:
+  parallelism: 50          # 50 concurrent pullers = the storm
+  completions: 50
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: pull-storm
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: puller
+          image: gcr.io/go-containerregistry/crane:debug
+          env:
+            - name: REGISTRY
+              value: "${REGISTRY}"                # rendered by scripts/45-render-workloads.sh
+            - name: IMAGE
+              value: "samples/pause:3.9"
+            - name: ITERATIONS
+              value: "200"
+          command: ["/busybox/sh", "-c"]
+          args:
+            - |
+              set -eu
+              i=0
+              while [ "$i" -lt "$ITERATIONS" ]; do
+                crane manifest "$REGISTRY/$IMAGE" >/dev/null 2>&1 || true
+                crane pull "$REGISTRY/$IMAGE" /tmp/out.tar >/dev/null 2>&1 || true
+                i=$((i+1))
+              done
+              echo "done $ITERATIONS iterations"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"

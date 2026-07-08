@@ -1,0 +1,40 @@
+{
+  "location": "${LOCATION}",
+  "identity": { "type": "SystemAssigned" },
+  "properties": {
+    "selectors": [
+      {
+        "type": "List",
+        "id": "sel-vmss",
+        "targets": [
+          { "type": "ChaosTarget", "id": "${VMSS_TARGET_ID}" }
+        ],
+        "filter": {
+          "type": "Simple",
+          "parameters": { "zones": [ "1" ] }
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "Shut down node pool in AZ 1",
+        "branches": [
+          {
+            "name": "branch1",
+            "actions": [
+              {
+                "type": "continuous",
+                "name": "urn:csci:microsoft:virtualMachineScaleSet:shutdown/2.0",
+                "selectorId": "sel-vmss",
+                "duration": "PT10M",
+                "parameters": [
+                  { "key": "abruptShutdown", "value": "true" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

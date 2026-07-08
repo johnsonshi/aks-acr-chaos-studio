@@ -1,0 +1,73 @@
+name: chaos-gameday
+
+# Manual "game day": start a named (Bicep-deployed) experiment, hold for a window, ensure it stops,
+# then collect SLIs from Log Analytics. Uses OIDC federation (no stored secrets).
+on:
+  workflow_dispatch:
+    inputs:
+      resourceGroup:
+        description: Resource group holding the experiments
+        required: true
+      experimentName:
+        description: Chaos experiment name (e.g. acrchaos-a1-nsg-block-acr)
+        required: true
+      holdMinutes:
+        description: Minutes to let the fault run before stopping
+        required: true
+        default: "10"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  gameday:
+    runs-on: ubuntu-latest
+    env:
+      # Set these as repo variables (Settings > Secrets and variables > Actions > Variables)
+      RESOURCE_GROUP: ${{ inputs.resourceGroup }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      AKS_NAME: ${{ vars.AKS_NAME }}
+      LAW_ID: ${{ vars.LAW_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Baseline probe
+        run: bash scripts/probe-reachability.sh || true
+
+      - name: Start experiment
+        run: |
+          az rest --method post --url \
+            "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Chaos/experiments/${{ inputs.experimentName }}/start?api-version=2024-01-01"
+
+      - name: Probe during fault
+        run: |
+          sleep 60
+          bash scripts/probe-reachability.sh || true
+
+      - name: Hold for the fault window
+        run: sleep "$(( ${{ inputs.holdMinutes }} * 60 ))"
+
+      - name: Ensure experiment is stopped
+        if: always()
+        run: |
+          az rest --method post --url \
+            "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Chaos/experiments/${{ inputs.experimentName }}/cancel?api-version=2024-01-01" || true
+
+      - name: Collect SLIs
+        if: always()
+        run: bash scripts/collect-results.sh
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameday-${{ inputs.experimentName }}
+          path: results/

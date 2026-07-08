@@ -1,0 +1,18 @@
+# Latency observation pod for A3 (network chaos) — has curl (%{time_total}); busybox dns-probe can't
+# measure latency cleanly. Labeled role=chaos-target so the Chaos Mesh experiments select it.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: net-probe
+  labels:
+    app: net-probe
+    role: chaos-target
+spec:
+  containers:
+    - name: probe
+      image: nicolaka/netshoot
+      command: ["sleep", "36000"]
+      resources:
+        requests:
+          cpu: "10m"
+          memory: "32Mi"

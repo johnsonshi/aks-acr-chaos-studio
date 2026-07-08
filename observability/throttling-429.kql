@@ -1,0 +1,7 @@
+// Throttling (D1/D2/D3): HTTP 429 rate, broken down by identity to show tenant-fairness isolation.
+// Table: ContainerRegistryRepositoryEvents.
+ContainerRegistryRepositoryEvents
+| where TimeGenerated > ago(1h)
+| where tostring(ResultDescription) == "429"
+| summarize throttled = count() by bin(TimeGenerated, 1m), Identity, Repository
+| order by TimeGenerated asc
